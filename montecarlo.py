@@ -56,12 +56,16 @@ class MonteCarloRunner( object ):
 
 
     def run(self, initialValue, size, iterations=1):
-        result =np.empty((iterations,size+1))
-        result[:,0]=initialValue
-        for iteration in range(iterations):
+        results =np.empty((iterations,size))
+        for iterationNumber in range(iterations):
+            iteration=np.empty(size+1)
+            iteration[0] = initialValue
+            phiVector = np.random.normal(loc=0, scale=1, size=size)
+            yieldVector = np.exp(
+                (self.mu - (self.sigma ** 2) / 2) * self.period + self.sigma * np.sqrt(self.period) * phiVector)
             for i in range(size):
-                phiVector = np.random.normal(loc=0, scale=1, size=size)
-                yieldVector = np.exp((self.mu - (self.sigma ** 2) / 2) * self.period + self.sigma * np.sqrt(self.period) * phiVector)
-                result[iteration,i+1]=result[iteration,i]*yieldVector[i]
+                iteration[i+1]=iteration[i]*yieldVector[i]
 
-        return np.squeeze( result )
+            results[iterationNumber,:]=iteration[1:]
+
+        return np.squeeze( results )

@@ -45,8 +45,8 @@ class Cuts( object ):
 
         self.transitionProbabilityMatrix.loc['crisisYrecuperacion', 'hiperinflacion'] = 0.05
         self.transitionProbabilityMatrix.loc['crisisYrecuperacion', 'convertibilidad'] = 0.10
-        self.transitionProbabilityMatrix.loc['crisisYrecuperacion', 'crisisYrecuperacion'] = 0.20
-        self.transitionProbabilityMatrix.loc['crisisYrecuperacion', 'kirchner'] = 0.60
+        self.transitionProbabilityMatrix.loc['crisisYrecuperacion', 'crisisYrecuperacion'] = 0.10
+        self.transitionProbabilityMatrix.loc['crisisYrecuperacion', 'kirchner'] = 0.70
         self.transitionProbabilityMatrix.loc['crisisYrecuperacion', 'macri'] = 0.05
 
         self.transitionProbabilityMatrix.loc['kirchner', 'hiperinflacion'] = 0.20
