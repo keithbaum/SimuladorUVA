@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from cuts import Cuts
 from montecarlo import MonteCarloRunner, MontecarloCharacterization
 
@@ -41,33 +42,38 @@ def refinance(settlementNumber):
     return 20
 
 
-def calculateSettlementToSalaryRatios( salaries, initialSettlementToSalaryRatio=30, explosionRate=60):
-    results = np.empty(salaries.shape)
-    indexes = getIndexWhereLoanExplodes(explosionRate, initialSettlementToSalaryRatio, salaries)
+def calculateSettlementToSalaryRatios( salaries, loanCalculator, originalLoanLength, initialSettlementToSalaryRatio=30, explosionRate=60):
+    originalSettlement = loanCalculator.compute().due
+    indexes = getIndexWhereLoanExplodes(explosionRate, initialSettlementToSalaryRatio, salaries, originalLoanLength)
     settlements = np.ones(salaries.shape)*initialSettlementToSalaryRatio
     if len(salaries.shape)==2:
         iterations = salaries.shape[0]
         for iterationNumber in range(iterations):
             if indexes[iterationNumber]:
-                settlements[iterationNumber,indexes[iterationNumber]:]=refinance(indexes[iterationNumber])
-
+                settlements[iterationNumber,indexes[iterationNumber]:]=loanCalculator.reFinance(indexes[iterationNumber],
+                                                                                                salaries.shape[1]-indexes[iterationNumber],
+                                                                                                refinanceInTime='monthly').due/originalSettlement*initialSettlementToSalaryRatio
+            else:
+                settlements[iterationNumber,originalLoanLength:]=np.nan
     else:
         if indexes:
-            settlements[indexes:]=refinance(indexes)
+            settlements[indexes:]=loanCalculator.reFinance(indexes,salaries.shape[0]-indexes,refinanceInTime='monthly').due/originalSettlement*initialSettlementToSalaryRatio
+        else:
+            settlements[originalLoanLength:]=np.nan
 
     return (indexes, settlements/salaries)
 
 
 
-def getIndexWhereLoanExplodes(explosionRate, initialSettlementToSalaryRatio, salaries):
+def getIndexWhereLoanExplodes(explosionRate, initialSettlementToSalaryRatio, salaries, originalLoanLength):
     if len(salaries.shape) == 2:  # If simulation had iterations
         iterations = salaries.shape[0]
         indexWhereRefinanced = np.empty(iterations)
         for iterationNumber in range(iterations):
-            indexWhereRefinanced[iterationNumber] = getIndexWhereSingleLoanExplodes(salaries[iterationNumber, :],
+            indexWhereRefinanced[iterationNumber] = getIndexWhereSingleLoanExplodes(salaries[iterationNumber,:originalLoanLength],
                                                                                     initialSettlementToSalaryRatio, explosionRate)
     else:
-        indexWhereRefinanced = getIndexWhereSingleLoanExplodes(salaries, initialSettlementToSalaryRatio, explosionRate)
+        indexWhereRefinanced = getIndexWhereSingleLoanExplodes(salaries[:originalLoanLength], initialSettlementToSalaryRatio, explosionRate)
 
     return indexWhereRefinanced.astype(int)
 
@@ -77,6 +83,25 @@ def getIndexWhereSingleLoanExplodes(salary, initialSettlementToSalaryRatio, expl
     indexes = np.where(initialRate > explosionRate / 100.0)[0]
     return 0 if len(indexes) == 0 else indexes[0]
 
+def printLoanReport(indexWhereRefinanced, settlementToSalaryRatios,originalLoanLength, explosionRate=60):
+    data = []
+    if len(settlementToSalaryRatios.shape)==2:
+        for iterationNumber in range(settlementToSalaryRatios.shape[0]):
+            data.append((indexWhereRefinanced[iterationNumber],
+                         settlementToSalaryRatios[iterationNumber,originalLoanLength], #ToDo: Where it was refinanced
+                         len(np.where(settlementToSalaryRatios[iterationNumber]>explosionRate/100.0)[0])>0))
+    else:
+        data.append((indexWhereRefinanced,settlementToSalaryRatios[-1],len(np.where(settlementToSalaryRatios>explosionRate/100.0)[0])>0))
 
+    results = pd.DataFrame(columns=['Month where refinanced', 'Final ratio', 'Defaulted?'],data=data)
 
+    print( results.to_string() )
+    defaulted = len(results.loc[results['Defaulted?']==True])
+    nonRefinanced = len(results.loc[results['Month where refinanced']==0])
+    succesfullyRefinanced = len(results.loc[(results['Month where refinanced'] != 0) & (results['Defaulted?'] == False)])
+    print( "%s defaulted, %s payed without refinancing, %s payed with refinancing"% (defaulted, nonRefinanced, succesfullyRefinanced) )
+    print( "Default rate= %s%%" % str(defaulted/len(results.index)*100.0) )
 
+def killDefaulted(settlementToSalaryRatios, explosionRate):
+    settlementToSalaryRatios[np.where(settlementToSalaryRatios>explosionRate/100.0)[0]]=np.nan
+    return settlementToSalaryRatios
