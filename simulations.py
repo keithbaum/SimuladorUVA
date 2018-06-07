@@ -38,9 +38,6 @@ def generatePeriodVector(cuts, initialPeriod, loanLength, monthsPerCut, numberOf
 def currentSumOfPeriods(periods):
     return np.sum([months for cutName,months in [cut for cut in periods]])
 
-def refinance(settlementNumber):
-    return 20
-
 
 def calculateSettlementToSalaryRatios( salaries, loanCalculator, originalLoanLength, initialSettlementToSalaryRatio=30, explosionRate=60):
     originalSettlement = loanCalculator.compute().due
@@ -83,17 +80,19 @@ def getIndexWhereSingleLoanExplodes(salary, initialSettlementToSalaryRatio, expl
     indexes = np.where(initialRate > explosionRate / 100.0)[0]
     return 0 if len(indexes) == 0 else indexes[0]
 
-def printLoanReport(indexWhereRefinanced, settlementToSalaryRatios,originalLoanLength, explosionRate=60):
+def printLoanReport(indexWhereRefinanced, settlementToSalaryRatios,originalLoanLength):
     data = []
     if len(settlementToSalaryRatios.shape)==2:
         for iterationNumber in range(settlementToSalaryRatios.shape[0]):
-            data.append((indexWhereRefinanced[iterationNumber],
-                         settlementToSalaryRatios[iterationNumber,originalLoanLength], #ToDo: Where it was refinanced
-                         len(np.where(settlementToSalaryRatios[iterationNumber]>explosionRate/100.0)[0])>0))
+            refinancedMonth=indexWhereRefinanced[iterationNumber]
+            hasDefaulted=np.count_nonzero(np.isnan(settlementToSalaryRatios[iterationNumber]))>settlementToSalaryRatios.shape[1]-originalLoanLength
+            data.append((refinancedMonth,hasDefaulted))
     else:
-        data.append((indexWhereRefinanced,settlementToSalaryRatios[-1],len(np.where(settlementToSalaryRatios>explosionRate/100.0)[0])>0))
+        refinancedMonth = indexWhereRefinanced
+        hasDefaulted = np.count_nonzero(np.isnan(settlementToSalaryRatios)) > len(settlementToSalaryRatios) - originalLoanLength
+        data=(refinancedMonth, hasDefaulted)
 
-    results = pd.DataFrame(columns=['Month where refinanced', 'Final ratio', 'Defaulted?'],data=data)
+    results = pd.DataFrame(columns=['Month where refinanced', 'Defaulted?'],data=data)
 
     print( results.to_string() )
     defaulted = len(results.loc[results['Defaulted?']==True])
@@ -103,5 +102,8 @@ def printLoanReport(indexWhereRefinanced, settlementToSalaryRatios,originalLoanL
     print( "Default rate= %s%%" % str(defaulted/len(results.index)*100.0) )
 
 def killDefaulted(settlementToSalaryRatios, explosionRate):
-    settlementToSalaryRatios[np.where(settlementToSalaryRatios>explosionRate/100.0)[0]]=np.nan
+    defaulted=np.unique(np.argwhere(settlementToSalaryRatios>explosionRate/100.0)[:,0])
+    indexWhereDefaultOccured=[ np.where( settlementToSalaryRatios[i]>explosionRate/100 )[0][0] for i in defaulted ]
+    for iterationNumber,iteration in enumerate(defaulted):
+        settlementToSalaryRatios[iteration,indexWhereDefaultOccured[iterationNumber]:]=np.nan
     return settlementToSalaryRatios

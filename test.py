@@ -25,7 +25,6 @@ salaries = salarySimulationRun(totalIterations=10000,
                               possibleExtensionInMonths=12)
 
 loanCalculator = LoanCalculator(10000,loanLength,interestRate,payment='monthly',loanTimeIn='monthly')
-
 indexWhereRefinanced,settlementToSalaryRatios = calculateSettlementToSalaryRatios(salaries=salaries,
                                                             loanCalculator=loanCalculator,
                                                             originalLoanLength=loanLength,
@@ -33,8 +32,7 @@ indexWhereRefinanced,settlementToSalaryRatios = calculateSettlementToSalaryRatio
                                                             explosionRate=explosionRate,
                                                             )
 settlementToSalaryRatios = killDefaulted(settlementToSalaryRatios, explosionRate=explosionRate)
-printLoanReport(indexWhereRefinanced, originalLoanLength, settlementToSalaryRatios)
-
+printLoanReport(indexWhereRefinanced, settlementToSalaryRatios,loanLength)
 
 plt.plot(settlementToSalaryRatios.T, alpha=0.5)
 plt.show()
