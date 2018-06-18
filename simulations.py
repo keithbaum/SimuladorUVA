@@ -2,13 +2,21 @@ import numpy as np
 import pandas as pd
 from cuts import Cuts
 from montecarlo import MonteCarloRunner, MontecarloCharacterization
+from non_normal import NonGaussianCharacterization, NonGaussianParameters
 
-def salarySimulationRun(totalIterations, loanLength, remainingMonthsForActualCut, monthsPerCut, initialCut, historicSeries, possibleExtensionInMonths):
+def salarySimulationRun(totalIterations, loanLength, remainingMonthsForActualCut, monthsPerCut, initialCut, historicSeries, possibleExtensionInMonths, assumeGaussian=True):
     cuts = Cuts()
     extendedLoanLength = loanLength + possibleExtensionInMonths
     numberOfPeriods = int( np.ceil( (extendedLoanLength-remainingMonthsForActualCut)/monthsPerCut) )
+
     parameters = MontecarloCharacterization(series=historicSeries, cuts=Cuts.argentinaCuts,
-                                            period=12.0 / 252).getYieldsMeanAndSigma()
+                                                period=12.0 / 252).getYieldsMeanAndSigma()
+
+    if not assumeGaussian:
+        nonGaussianCalculators = NonGaussianCharacterization(series=historicSeries, cuts=Cuts.argentinaCuts,
+                                                period=12.0 / 252).getInverseECDFs()
+        for cutName, parameter in parameters.items():
+            parameters[cutName] = NonGaussianParameters(*parameter,nonGaussianCalculators[cutName])
 
     results = np.empty((totalIterations, int(extendedLoanLength + 1)))
     initialPeriod = (initialCut, remainingMonthsForActualCut)

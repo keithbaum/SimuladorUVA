@@ -1,4 +1,5 @@
 from collections import namedtuple
+from non_normal import generateRandomVector
 import numpy as np
 import datetime
 
@@ -47,9 +48,13 @@ class MontecarloCharacterization(object):
 class MonteCarloRunner( object ):
 
     def __init__(self, monteCarloParameters):
+
         self.mu = monteCarloParameters.mu
         self.sigma = monteCarloParameters.sigma
         self.period = monteCarloParameters.period
+        self.nonGaussian = hasattr( monteCarloParameters, 'calculator')
+        if self.nonGaussian:
+            self.nonGaussianCalculator = monteCarloParameters.calculator
 
         self.seed = int((datetime.datetime.utcnow() - datetime.datetime(1970, 1, 1)).microseconds)
         np.random.seed(self.seed)
@@ -60,7 +65,10 @@ class MonteCarloRunner( object ):
         for iterationNumber in range(iterations):
             iteration=np.empty(size+1)
             iteration[0] = initialValue
-            phiVector = np.random.normal(loc=0, scale=1, size=size)
+            if not self.nonGaussian:
+                phiVector = np.random.normal(loc=0, scale=1, size=size)
+            else:
+                phiVector = generateRandomVector(self.nonGaussianCalculator,size)
             yieldVector = np.exp(
                 (self.mu - (self.sigma ** 2) / 2) * self.period + self.sigma * np.sqrt(self.period) * phiVector)
             for i in range(size):
