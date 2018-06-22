@@ -20,31 +20,31 @@ initialCut='macri'
 
 
 series = pickle.load( open( "salarios.p", "rb" ) )
-#with mockContext():
-salaries = salarySimulationRun(totalIterations=10000,
-                              loanLength=loanLength,
-                              remainingMonthsForActualCut=remainingMonthsForActualCut,
-                              monthsPerCut=monthsPerCut,
-                              initialCut=initialCut,
-                              historicSeries=series,
-                              possibleExtensionInMonths=12,
-                              distrib='t')
 
-loanCalculator = LoanCalculator(10000,loanLength,interestRate,payment='monthly',loanTimeIn='monthly')
-indexWhereRefinanced,settlementToSalaryRatios = calculateSettlementToSalaryRatios(salaries=salaries,
-                                                            loanCalculator=loanCalculator,
-                                                            originalLoanLength=loanLength,
-                                                            initialSettlementToSalaryRatio=initialSettlementToSalaryRatio,
-                                                            explosionRate=explosionRate,
-                                                            consecutiveAboveExplosionRateForRefinance=consecutiveAboveExplosionRateForRefinance
-                                                            )
-settlementToSalaryRatios, defaulted = killDefaulted(settlementToSalaryRatios, explosionRate=explosionRate,
-                                         indexWhereRefinanced=indexWhereRefinanced,
-                                         consecutiveAboveExplosionRateForDefault=consecutiveAboveExplosionRateForDefault)
-printLoanReport(indexWhereRefinanced, settlementToSalaryRatios, loanLength, defaulted)
+for consecutiveAboveExplosionRateForRefinance in (1,2,3,4):
+    for explosionRate in (30,40,50,60):
+        salaries = salarySimulationRun(totalIterations=10000,
+                                      loanLength=loanLength,
+                                      remainingMonthsForActualCut=remainingMonthsForActualCut,
+                                      monthsPerCut=monthsPerCut,
+                                      initialCut=initialCut,
+                                      historicSeries=series,
+                                      possibleExtensionInMonths=12,
+                                      distrib='t')
 
-plt.plot(settlementToSalaryRatios.T, alpha=0.5)
-plt.show()
+        loanCalculator = LoanCalculator(10000,loanLength,interestRate,payment='monthly',loanTimeIn='monthly')
+        indexWhereRefinanced,settlementToSalaryRatios = calculateSettlementToSalaryRatios(salaries=salaries,
+                                                                    loanCalculator=loanCalculator,
+                                                                    originalLoanLength=loanLength,
+                                                                    initialSettlementToSalaryRatio=initialSettlementToSalaryRatio,
+                                                                    explosionRate=explosionRate,
+                                                                    consecutiveAboveExplosionRateForRefinance=consecutiveAboveExplosionRateForRefinance
+                                                                    )
+        settlementToSalaryRatios, defaulted = killDefaulted(settlementToSalaryRatios, explosionRate=explosionRate,
+                                                 indexWhereRefinanced=indexWhereRefinanced,
+                                                 consecutiveAboveExplosionRateForDefault=consecutiveAboveExplosionRateForDefault)
+        print("%s - %s"%(consecutiveAboveExplosionRateForRefinance,explosionRate))
+        printLoanReport(indexWhereRefinanced, settlementToSalaryRatios, loanLength, defaulted)
 
 
 

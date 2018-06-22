@@ -28,8 +28,6 @@ def salarySimulationRun(totalIterations, loanLength, remainingMonthsForActualCut
             runValues.extend( MonteCarloRunner(parameters[period[0]]).run(initialValue=runValues[-1], size=int(period[1]),
                                                                       iterations=1) )
         results[k, :] = runValues
-        if k % 1000==0:
-            print( '%s iterations done'%str(k) )
     return results
 
 
@@ -113,12 +111,12 @@ def printLoanReport(indexWhereRefinanced, settlementToSalaryRatios,originalLoanL
 
     results = pd.DataFrame(columns=['Month where refinanced', 'Defaulted?'],data=data)
 
-    print( results.to_string() )
+    #print( results.to_string() )
     defaulted = len(results.loc[results['Defaulted?']==True])
     nonRefinanced = len(results.loc[results['Month where refinanced']==0])
     succesfullyRefinanced = len(results.loc[(results['Month where refinanced'] != 0) & (results['Defaulted?'] == False)])
     print( "%s defaulted, %s payed without refinancing, %s payed with refinancing"% (defaulted, nonRefinanced, succesfullyRefinanced) )
-    print( "Default rate= %s%%" % str(defaulted/len(results.index)*100.0) )
+    #print( "Default rate= %s%%" % str(defaulted/len(results.index)*100.0) )
 
 def killDefaulted(settlementToSalaryRatios, explosionRate, indexWhereRefinanced, consecutiveAboveExplosionRateForDefault):
     refinanced=np.argwhere( indexWhereRefinanced !=0 )[:,0]
