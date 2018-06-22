@@ -1,24 +1,23 @@
 import numpy as np
-from datetime import datetime
 from collections import namedtuple
-from statsmodels.distributions.empirical_distribution import ECDF
-from scipy.interpolate import interp1d
+import scipy.stats
+from functools import partial
 
 NonGaussianParameters = namedtuple('NonGaussianParameters',['mu','sigma','period','calculator'])
+distributions = ('norm','t','crystalball','gumbel_l','gumbel_r')
 
 class NonGaussianCharacterization( object ):
 
-    def __init__(self, series, cuts, period):
+    def __init__(self, series, cuts, gaussianParameters):
         self.series = series
         self.cuts = cuts
-        self.period = period
-        self.seed = (datetime.utcnow() - datetime(1970, 1, 1)).microseconds
-        np.random.seed(self.seed)
+        self.gaussianParameters = gaussianParameters
 
-    def _runCharacterization(self, series):
-        #ToDo: NonGaussian characterization
-        ecdf = ECDF(series)
-        return interp1d(ecdf.y[1:],ecdf.x[1:],fill_value='extrapolate')
+    def _runCharacterization(self, series, distribution='t'):
+        distrib = getattr(scipy.stats,distribution)
+        args = list( distrib.fit(data=series) )
+        args[-2:]=(0,1)     #mu and sigma locked to 0,1 because montecarlo will scale it
+        return partial( distrib.rvs, *args )
 
 
     @staticmethod
@@ -30,16 +29,15 @@ class NonGaussianCharacterization( object ):
         series = np.squeeze( series )
         return np.log( series[1:]/series[:-1] )
 
-    def getInverseECDFs(self):
+    def getCalculators(self, distrib):
         results = {}
         for cutName, cut in self.cuts.items():
             subSeries = self.getSeriesByCuts(self.series, cut).values
             subSeriesYields = self.getSeriesYields(subSeries)
-            results[cutName] = self._runCharacterization(subSeriesYields)
+            results[cutName] = self._runCharacterization(subSeriesYields,distrib)
 
         return results
 
 
 def generateRandomVector(calculator,size):
-    u = np.random.uniform(0,1,size)
-    return calculator(u)
+    return calculator(size=size)

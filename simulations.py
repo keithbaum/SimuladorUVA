@@ -4,7 +4,7 @@ from cuts import Cuts
 from montecarlo import MonteCarloRunner, MontecarloCharacterization
 from non_normal import NonGaussianCharacterization, NonGaussianParameters
 
-def salarySimulationRun(totalIterations, loanLength, remainingMonthsForActualCut, monthsPerCut, initialCut, historicSeries, possibleExtensionInMonths, assumeGaussian=True):
+def salarySimulationRun(totalIterations, loanLength, remainingMonthsForActualCut, monthsPerCut, initialCut, historicSeries, possibleExtensionInMonths, distrib='norm'):
     cuts = Cuts()
     extendedLoanLength = loanLength + possibleExtensionInMonths
     numberOfPeriods = int( np.ceil( (extendedLoanLength-remainingMonthsForActualCut)/monthsPerCut) )
@@ -12,11 +12,10 @@ def salarySimulationRun(totalIterations, loanLength, remainingMonthsForActualCut
     parameters = MontecarloCharacterization(series=historicSeries, cuts=Cuts.argentinaCuts,
                                                 period=12.0 / 252).getYieldsMeanAndSigma()
 
-    if not assumeGaussian:
-        nonGaussianCalculators = NonGaussianCharacterization(series=historicSeries, cuts=Cuts.argentinaCuts,
-                                                period=12.0 / 252).getInverseECDFs()
+    if distrib != 'norm':
+        calculators = NonGaussianCharacterization(series=historicSeries, cuts=Cuts.argentinaCuts, gaussianParameters=parameters).getCalculators(distrib)
         for cutName, parameter in parameters.items():
-            parameters[cutName] = NonGaussianParameters(*parameter,nonGaussianCalculators[cutName])
+            parameters[cutName] = NonGaussianParameters(*parameter,calculators[cutName])
 
     results = np.empty((totalIterations, int(extendedLoanLength + 1)))
     initialPeriod = (initialCut, remainingMonthsForActualCut)
@@ -29,7 +28,8 @@ def salarySimulationRun(totalIterations, loanLength, remainingMonthsForActualCut
             runValues.extend( MonteCarloRunner(parameters[period[0]]).run(initialValue=runValues[-1], size=int(period[1]),
                                                                       iterations=1) )
         results[k, :] = runValues
-
+        if k % 1000==0:
+            print( '%s iterations done'%str(k) )
     return results
 
 
@@ -47,9 +47,9 @@ def currentSumOfPeriods(periods):
     return np.sum([months for cutName,months in [cut for cut in periods]])
 
 
-def calculateSettlementToSalaryRatios( salaries, loanCalculator, originalLoanLength, initialSettlementToSalaryRatio=30, explosionRate=60):
+def calculateSettlementToSalaryRatios( salaries, loanCalculator, originalLoanLength, initialSettlementToSalaryRatio=30, explosionRate=60, consecutiveAboveExplosionRateForRefinance=3):
     originalSettlement = loanCalculator.compute().due
-    indexes = getIndexWhereLoanExplodes(explosionRate, initialSettlementToSalaryRatio, salaries, originalLoanLength)
+    indexes = getIndexWhereLoanExplodes(explosionRate, initialSettlementToSalaryRatio, salaries, originalLoanLength, consecutiveAboveExplosionRateForRefinance)
     settlements = np.ones(salaries.shape)*initialSettlementToSalaryRatio
     if len(salaries.shape)==2:
         iterations = salaries.shape[0]
@@ -70,25 +70,36 @@ def calculateSettlementToSalaryRatios( salaries, loanCalculator, originalLoanLen
 
 
 
-def getIndexWhereLoanExplodes(explosionRate, initialSettlementToSalaryRatio, salaries, originalLoanLength):
+def getIndexWhereLoanExplodes(explosionRate, initialSettlementToSalaryRatio, salaries, originalLoanLength, consecutiveAboveExplosionRateForRefinance):
     if len(salaries.shape) == 2:  # If simulation had iterations
         iterations = salaries.shape[0]
         indexWhereRefinanced = np.empty(iterations)
         for iterationNumber in range(iterations):
             indexWhereRefinanced[iterationNumber] = getIndexWhereSingleLoanExplodes(salaries[iterationNumber,:originalLoanLength],
-                                                                                    initialSettlementToSalaryRatio, explosionRate)
+                                                                                    initialSettlementToSalaryRatio, explosionRate,
+                                                                                    consecutiveAboveExplosionRateForRefinance)
     else:
-        indexWhereRefinanced = getIndexWhereSingleLoanExplodes(salaries[:originalLoanLength], initialSettlementToSalaryRatio, explosionRate)
+        indexWhereRefinanced = getIndexWhereSingleLoanExplodes(salaries[:originalLoanLength], initialSettlementToSalaryRatio, explosionRate, consecutiveAboveExplosionRateForRefinance)
 
     return indexWhereRefinanced.astype(int)
 
 
-def getIndexWhereSingleLoanExplodes(salary, initialSettlementToSalaryRatio, explosionRate):
+def getIndexWhereSingleLoanExplodes(salary, initialSettlementToSalaryRatio, explosionRate, consecutiveAboveExplosionRateForRefinance):
     initialRate = initialSettlementToSalaryRatio / salary
-    indexes = np.where(initialRate > explosionRate / 100.0)[0]
-    return 0 if len(indexes) == 0 else indexes[0]
+    indexesWhereAboveExplosion = initialRate > explosionRate / 100.0
+    indexes= find_subsequence( indexesWhereAboveExplosion, [True]*consecutiveAboveExplosionRateForRefinance )
+    return 0 if len(indexes) == 0 else indexes[0]+consecutiveAboveExplosionRateForRefinance-1
 
-def printLoanReport(indexWhereRefinanced, settlementToSalaryRatios,originalLoanLength):
+def find_subsequence(seq, subseq):
+    target = np.dot(subseq, subseq)
+    candidates = np.where(np.correlate(seq,
+                                       subseq, mode='valid') == target)[0]
+    # some of the candidates entries may be false positives, double check
+    check = candidates[:, np.newaxis] + np.arange(len(subseq))
+    mask = np.all((np.take(seq, check) == subseq), axis=-1)
+    return candidates[mask]
+
+def printLoanReport(indexWhereRefinanced, settlementToSalaryRatios,originalLoanLength, defaulted):
     data = []
     if len(settlementToSalaryRatios.shape)==2:
         for iterationNumber in range(settlementToSalaryRatios.shape[0]):
@@ -109,9 +120,17 @@ def printLoanReport(indexWhereRefinanced, settlementToSalaryRatios,originalLoanL
     print( "%s defaulted, %s payed without refinancing, %s payed with refinancing"% (defaulted, nonRefinanced, succesfullyRefinanced) )
     print( "Default rate= %s%%" % str(defaulted/len(results.index)*100.0) )
 
-def killDefaulted(settlementToSalaryRatios, explosionRate):
-    defaulted=np.unique(np.argwhere(settlementToSalaryRatios>explosionRate/100.0)[:,0])
-    indexWhereDefaultOccured=[ np.where( settlementToSalaryRatios[i]>explosionRate/100 )[0][0] for i in defaulted ]
-    for iterationNumber,iteration in enumerate(defaulted):
-        settlementToSalaryRatios[iteration,indexWhereDefaultOccured[iterationNumber]:]=np.nan
-    return settlementToSalaryRatios
+def killDefaulted(settlementToSalaryRatios, explosionRate, indexWhereRefinanced, consecutiveAboveExplosionRateForDefault):
+    refinanced=np.argwhere( indexWhereRefinanced !=0 )[:,0]
+    defaulted = {}
+    for refinancedIndex in refinanced:
+            remainingAfterRefinanced = settlementToSalaryRatios[refinancedIndex, indexWhereRefinanced[refinancedIndex]+1:]
+            indexesWhereAboveExplosion = remainingAfterRefinanced > explosionRate / 100.0
+            indexes = find_subsequence(indexesWhereAboveExplosion, [True] * consecutiveAboveExplosionRateForDefault)
+            defaultIndex = None if len(indexes) == 0 else indexWhereRefinanced[refinancedIndex] + 1 + indexes[0] + consecutiveAboveExplosionRateForDefault - 1
+            if not defaultIndex is None:
+                defaulted[refinancedIndex]=defaultIndex
+
+    for iteration,indexWhereDefaultOccured in defaulted.items():
+        settlementToSalaryRatios[iteration,indexWhereDefaultOccured:]=np.nan
+    return (settlementToSalaryRatios, defaulted)

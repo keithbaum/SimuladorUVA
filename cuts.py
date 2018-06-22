@@ -1,5 +1,6 @@
 from collections.__init__ import namedtuple
 from datetime import datetime
+from unittest import mock
 import pandas as pd
 import numpy as np
 
@@ -60,6 +61,16 @@ class Cuts( object ):
         self.transitionProbabilityMatrix.loc['macri', 'crisisYrecuperacion'] = 0.15
         self.transitionProbabilityMatrix.loc['macri', 'kirchner'] = 0.20
         self.transitionProbabilityMatrix.loc['macri', 'macri'] = 0.35
+
+def mockContext():
+    def mockTransition(*args):
+        if hasattr(mockTransition,'index'):
+            mockTransition.index+=1
+        else:
+            mockTransition.index=0
+        return list(['macri','hiperinflacion','kirchner','kirchner','macri'])[mockTransition.index % 5]
+
+    return mock.patch('cuts.Cuts.cutTransition',side_effect=mockTransition)
 
 
 

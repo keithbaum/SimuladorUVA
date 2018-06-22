@@ -1,7 +1,7 @@
 import matplotlib.style
 from simulations import salarySimulationRun, calculateSettlementToSalaryRatios, printLoanReport, killDefaulted
 from loan_calculator import LoanCalculator
-from unittest import mock
+from cuts import mockContext
 
 matplotlib.use("Qt5Agg")
 matplotlib.style.use('classic')
@@ -13,26 +13,22 @@ monthsPerCut=int(4*12)
 interestRate = 0.05/12
 remainingMonthsForActualCut=6+12.0
 initialSettlementToSalaryRatio=30
+consecutiveAboveExplosionRateForRefinance=3
+consecutiveAboveExplosionRateForDefault=1
 explosionRate=60
 initialCut='macri'
 
-def mockTransition(*args):
-    if hasattr(mockTransition,'index'):
-        mockTransition.index+=1
-    else:
-        mockTransition.index=0
-    return list(['macri','hiperinflacion','kirchner','kirchner','macri'])[mockTransition.index % 5]
 
 series = pickle.load( open( "salarios.p", "rb" ) )
-#with mock.patch('cuts.Cuts.cutTransition',side_effect=mockTransition):
-salaries = salarySimulationRun(totalIterations=1000,
+#with mockContext():
+salaries = salarySimulationRun(totalIterations=10000,
                               loanLength=loanLength,
                               remainingMonthsForActualCut=remainingMonthsForActualCut,
                               monthsPerCut=monthsPerCut,
                               initialCut=initialCut,
                               historicSeries=series,
                               possibleExtensionInMonths=12,
-                              assumeGaussian=True)
+                              distrib='t')
 
 loanCalculator = LoanCalculator(10000,loanLength,interestRate,payment='monthly',loanTimeIn='monthly')
 indexWhereRefinanced,settlementToSalaryRatios = calculateSettlementToSalaryRatios(salaries=salaries,
@@ -40,10 +36,16 @@ indexWhereRefinanced,settlementToSalaryRatios = calculateSettlementToSalaryRatio
                                                             originalLoanLength=loanLength,
                                                             initialSettlementToSalaryRatio=initialSettlementToSalaryRatio,
                                                             explosionRate=explosionRate,
+                                                            consecutiveAboveExplosionRateForRefinance=consecutiveAboveExplosionRateForRefinance
                                                             )
-settlementToSalaryRatios = killDefaulted(settlementToSalaryRatios, explosionRate=explosionRate)
-printLoanReport(indexWhereRefinanced, settlementToSalaryRatios,loanLength)
+settlementToSalaryRatios, defaulted = killDefaulted(settlementToSalaryRatios, explosionRate=explosionRate,
+                                         indexWhereRefinanced=indexWhereRefinanced,
+                                         consecutiveAboveExplosionRateForDefault=consecutiveAboveExplosionRateForDefault)
+printLoanReport(indexWhereRefinanced, settlementToSalaryRatios, loanLength, defaulted)
 
 plt.plot(settlementToSalaryRatios.T, alpha=0.5)
 plt.show()
+
+
+
 
