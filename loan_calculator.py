@@ -1,6 +1,9 @@
 import numpy as np
 import datetime
 from abc import ABC, abstractmethod
+import matplotlib.style
+matplotlib.use("Qt5Agg")
+matplotlib.style.use('classic')
 from matplotlib import pyplot as plt
 
 class Inflation(ABC):
@@ -169,7 +172,7 @@ class LoanCalculator:
         remainingLoan = currentLoan.remainingLoan
         lastCer        = currentLoan.paymentDetails['payment_details'][str(fromDue)]['cer']
         newStartTime   = self.startDate + datetime.timedelta(30)*(fromDue+1)
-        helper          = LoanCalculator(remainingLoan, refinanceTime, ir, payment, refinanceInTime, startDate=newStartTime, initialCer=lastCer
+        helper          = LoanCalculator(remainingLoan, refinanceTime, ir, payment, refinanceInTime, startDate=newStartTime, adjustFactor=lastCer
                                          ,inflationSchedule=self.inflationSchedule)
         return helper.compute()
 
